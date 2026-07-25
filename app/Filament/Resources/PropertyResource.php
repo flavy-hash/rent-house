@@ -76,8 +76,8 @@ class PropertyResource extends Resource
                             ->columnSpanFull(),
                     ]),
 
-                Forms\Components\Section::make('Photos')
-                    ->description('The cover photo appears on cards and search results. Add more photos for the gallery.')
+                Forms\Components\Section::make('Photos & video')
+                    ->description('The cover photo appears on cards and search results. Add more photos for the gallery and an optional video tour.')
                     ->columns(2)
                     ->schema([
                         Forms\Components\FileUpload::make('image')
@@ -85,16 +85,34 @@ class PropertyResource extends Resource
                             ->image()
                             ->disk('public')
                             ->directory('properties')
-                            ->imageEditor(),
+                            ->imageEditor()
+                            ->openable()
+                            ->downloadable()
+                            ->helperText('Upload a new image to replace the current cover photo.'),
 
                         Forms\Components\FileUpload::make('photos')
                             ->label('Gallery photos')
                             ->image()
                             ->multiple()
                             ->reorderable()
+                            ->appendFiles()
+                            ->openable()
+                            ->downloadable()
                             ->disk('public')
                             ->directory('properties')
-                            ->maxFiles(8),
+                            ->maxFiles(8)
+                            ->helperText('Add more photos, drag to reorder, or remove any you no longer want.'),
+
+                        Forms\Components\FileUpload::make('video')
+                            ->label('Video tour (optional)')
+                            ->disk('public')
+                            ->directory('property-videos')
+                            ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'])
+                            ->maxSize(51200) // 50 MB
+                            ->openable()
+                            ->downloadable()
+                            ->helperText('MP4, WebM, OGG or MOV, up to 50 MB. Upload a new file to replace the current tour, or remove it with the ✕.')
+                            ->columnSpanFull(),
                     ]),
 
                 Forms\Components\Section::make('Location on map')
@@ -227,5 +245,22 @@ class PropertyResource extends Resource
         }
 
         return $query;
+    }
+
+    // --- Only admins and approved landlords may manage listings ---------
+
+    public static function canViewAny(): bool
+    {
+        return (bool) Auth::user()?->canManageListings();
+    }
+
+    public static function canCreate(): bool
+    {
+        return (bool) Auth::user()?->canManageListings();
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return (bool) Auth::user()?->canManageListings();
     }
 }
