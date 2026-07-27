@@ -67,50 +67,32 @@ class PropertyController extends Controller
     }
 
     /**
-     * Form for a landlord to list a new property.
+     * The renter's saved / favourite properties page (favourites live in the browser).
      */
-    public function create()
+    public function saved()
     {
-        return view('properties.create', [
-            'regions' => Property::REGIONS,
-            'types' => Property::TYPES,
-        ]);
+        return view('properties.saved');
     }
 
     /**
-     * Persist a new listing.
+     * Return rendered cards for the given property ids (used by the Saved page).
      */
-    public function store(Request $request)
+    public function savedCards(Request $request)
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'region' => ['required', 'string', 'in:'.implode(',', Property::REGIONS)],
-            'area' => ['nullable', 'string', 'max:100'],
-            'type' => ['required', 'string', 'in:'.implode(',', Property::TYPES)],
-            'price' => ['required', 'integer', 'min:10000', 'max:100000000'],
-            'bedrooms' => ['required', 'integer', 'min:0', 'max:20'],
-            'bathrooms' => ['required', 'integer', 'min:0', 'max:20'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'amenities' => ['nullable', 'string', 'max:500'],
-            'landlord_name' => ['required', 'string', 'max:100'],
-            'phone' => ['required', 'string', 'max:20'],
-            'image' => ['nullable', 'image', 'max:4096'], // 4 MB
-        ]);
-
-        if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('properties', 'public');
-        }
-
-        $validated['amenities'] = collect(explode(',', $request->input('amenities', '')))
-            ->map(fn ($a) => trim($a))
-            ->filter()
-            ->values()
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($v) => trim($v))
+            ->filter(fn ($v) => ctype_digit($v))
+            ->take(100)
             ->all();
 
-        $property = Property::create($validated);
+        $properties = empty($ids)
+            ? collect()
+            : Property::where('is_available', true)
+                ->whereIn('id', $ids)
+                ->get()
+                ->sortBy(fn ($p) => array_search((string) $p->id, $ids))
+                ->values();
 
-        return redirect()
-            ->route('properties.show', $property)
-            ->with('status', 'Your property has been listed. Renters can now contact you!');
+        return view('partials.cards', compact('properties'));
     }
 }
