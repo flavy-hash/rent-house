@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class Property extends Model
@@ -12,16 +13,19 @@ class Property extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title', 'slug', 'region', 'area', 'type', 'price',
-        'bedrooms', 'bathrooms', 'description', 'amenities', 'image',
-        'landlord_name', 'phone', 'is_featured', 'is_available',
+        'user_id', 'title', 'slug', 'region', 'area', 'latitude', 'longitude',
+        'type', 'price', 'bedrooms', 'bathrooms', 'description', 'amenities',
+        'image', 'photos', 'video', 'landlord_name', 'phone', 'is_featured', 'is_available',
     ];
 
     protected $casts = [
         'amenities' => 'array',
+        'photos' => 'array',
         'is_featured' => 'boolean',
         'is_available' => 'boolean',
         'price' => 'integer',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     /**
@@ -62,6 +66,14 @@ class Property extends Model
     }
 
     /**
+     * The landlord who owns this listing.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
      * Price formatted as Tanzanian Shillings, e.g. "TZS 450,000".
      */
     public function getFormattedPriceAttribute(): string
@@ -82,19 +94,63 @@ class Property extends Model
     }
 
     /**
-     * Resolve the image to a usable URL (external URL or stored upload).
+     * Turn a stored path or external URL into a usable image URL.
+     */
+    public static function resolveImageUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://'])) {
+            return $path;
+        }
+
+        return asset('storage/'.$path);
+    }
+
+    /**
+     * Resolve the cover image (falls back to the first gallery photo, then a placeholder).
      */
     public function getImageUrlAttribute(): string
     {
-        if (! $this->image) {
-            return 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=1200&q=70';
+        return static::resolveImageUrl($this->image)
+            ?? ($this->gallery[0] ?? 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&w=1200&q=70');
+    }
+
+    /**
+     * All photo URLs for this property (cover first, then extra uploads), de-duplicated.
+     *
+     * @return list<string>
+     */
+    public function getGalleryAttribute(): array
+    {
+        $urls = [];
+
+        if ($cover = static::resolveImageUrl($this->image)) {
+            $urls[] = $cover;
         }
 
-        if (Str::startsWith($this->image, ['http://', 'https://'])) {
-            return $this->image;
+        foreach ($this->photos ?? [] as $photo) {
+            if ($url = static::resolveImageUrl($photo)) {
+                $urls[] = $url;
+            }
         }
 
-        return asset('storage/'.$this->image);
+        return array_values(array_unique($urls));
+    }
+
+    public function hasCoordinates(): bool
+    {
+        return ! is_null($this->latitude) && ! is_null($this->longitude);
+    }
+
+    /**
+     * Resolve the optional video tour to a usable URL (or null if none).
+     */
+    public function getVideoUrlAttribute(): ?string
+    {
+        return static::resolveImageUrl($this->video);
     }
 
     // --- Query scopes for filtering -------------------------------------
