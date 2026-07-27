@@ -4,13 +4,16 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PropertyResource\Pages;
 use App\Models\Property;
+use Closure;
 use Filament\Forms;
+use Filament\Forms\Components\BaseFileUpload;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class PropertyResource extends Resource
 {
@@ -88,7 +91,9 @@ class PropertyResource extends Resource
                             ->imageEditor()
                             ->openable()
                             ->downloadable()
-                            ->helperText('Upload a new image to replace the current cover photo.'),
+                            ->fetchFileInformation(false)
+                            ->getUploadedFileUsing(static::resolveExistingFile())
+                            ->helperText('The current photo shows below with an ✕ to remove it — or drop a new image on top to replace it.'),
 
                         Forms\Components\FileUpload::make('photos')
                             ->label('Gallery photos')
@@ -101,7 +106,9 @@ class PropertyResource extends Resource
                             ->disk('public')
                             ->directory('properties')
                             ->maxFiles(8)
-                            ->helperText('Add more photos, drag to reorder, or remove any you no longer want.'),
+                            ->fetchFileInformation(false)
+                            ->getUploadedFileUsing(static::resolveExistingFile())
+                            ->helperText('Add more photos, drag to reorder, or remove any with the ✕.'),
 
                         Forms\Components\FileUpload::make('video')
                             ->label('Video tour (optional)')
@@ -230,6 +237,43 @@ class PropertyResource extends Resource
             'create' => Pages\CreateProperty::route('/create'),
             'edit' => Pages\EditProperty::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Show existing files as removable preview cards — including external image
+     * URLs from the seed data, which Filament would otherwise skip because they
+     * don't live on the disk. This makes every current photo/video appear with
+     * an ✕ so it can be removed and replaced.
+     */
+    protected static function resolveExistingFile(): Closure
+    {
+        return function (BaseFileUpload $component, string $file, string|array|null $storedFileNames): ?array {
+            if (Str::startsWith($file, ['http://', 'https://'])) {
+                return [
+                    'name' => basename((string) parse_url($file, PHP_URL_PATH)) ?: 'photo',
+                    'size' => 0,
+                    'type' => null,
+                    'url' => $file,
+                ];
+            }
+
+            $storage = $component->getDisk();
+
+            try {
+                if (! $storage->exists($file)) {
+                    return null;
+                }
+            } catch (\Throwable $e) {
+                return null;
+            }
+
+            return [
+                'name' => ($component->isMultiple() ? ($storedFileNames[$file] ?? null) : $storedFileNames) ?? basename($file),
+                'size' => $storage->size($file),
+                'type' => $storage->mimeType($file),
+                'url' => $storage->url($file),
+            ];
+        };
     }
 
     /**
