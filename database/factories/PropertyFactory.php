@@ -46,10 +46,27 @@ class PropertyFactory extends Factory
         'Master en-suite', 'Garden', 'Solar water heater', 'DSTV ready',
     ];
 
+    /**
+     * Region centre coordinates (a little jitter is added per listing).
+     */
+    protected array $regionCoords = [
+        'Arusha' => [-3.3869, 36.6830],
+        'Dar es Salaam' => [-6.7924, 39.2083],
+        'Dodoma' => [-6.1630, 35.7516],
+        'Mwanza' => [-2.5164, 32.9175],
+        'Moshi' => [-3.3349, 37.3404],
+        'Zanzibar' => [-6.1659, 39.2026],
+        'Mbeya' => [-8.9094, 33.4608],
+        'Morogoro' => [-6.8278, 37.6591],
+        'Tanga' => [-5.0689, 39.0988],
+        'Iringa' => [-7.7700, 35.6900],
+    ];
+
     public function definition(): array
     {
         $region = fake()->randomElement(Property::REGIONS);
         $area = fake()->randomElement($this->areas[$region]);
+        [$lat, $lng] = $this->regionCoords[$region];
         $type = fake()->randomElement(Property::TYPES);
         $bedrooms = $type === 'Room' || $type === 'Studio'
             ? 1
@@ -71,6 +88,8 @@ class PropertyFactory extends Factory
             'slug' => Str::slug($title).'-'.Str::lower(Str::random(4)),
             'region' => $region,
             'area' => $area,
+            'latitude' => round($lat + fake()->randomFloat(4, -0.05, 0.05), 7),
+            'longitude' => round($lng + fake()->randomFloat(4, -0.05, 0.05), 7),
             'type' => $type,
             'price' => $price,
             'bedrooms' => $bedrooms,
